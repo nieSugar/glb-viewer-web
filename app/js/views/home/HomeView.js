@@ -115,118 +115,64 @@ export class HomeView
         alert('Please select a valid file');
         return;
       }
-      this.modal_content.classList.add('hidden');
-      this.modal_loading.classList.remove('hidden');
 
-      const reader = new FileReader();
-      reader.onload = (e) =>
-      {
-        const arrayBuffer = e.target.result;
-        const base64String = btoa(
-          new Uint8Array(arrayBuffer)
-            .reduce((data, byte) => data + String.fromCharCode(byte), '')
-        );
-
-        // Send the base64 string to the WebView
-        this.iframe.contentWindow.postMessage({
-          type: 'loadModelFromBase64',
-          data: base64String,
-          extension: file.name.split('.').pop().toLowerCase(),
-          fileSize: arrayBuffer.byteLength
-        }, '*');
-
-        this.modal.classList.add('hidden');
-        this.iframe_container.classList.remove('disabled');
-        this.blur.classList.add('hidden');
-        this.change_model_button.classList.remove('hidden');
-      };
-      reader.readAsArrayBuffer(file);
+      this.load_single_file_model(file);
     }
     else if (has_gltf)
     {
-      if (files.length === 1)
-      {
-        alert('Please select all files needed for the model or drop a folder containing the model files');
-        return;
-      }
       // search for a gltf file
       const file = files.find(file => file.name.toLowerCase().endsWith('.gltf'));
 
       if (file)
       {
         this.load_gltf_with_resources(file, files);
-        this.modal.classList.add('hidden');
-        this.iframe_container.classList.remove('disabled');
-        this.blur.classList.add('hidden');
-        this.change_model_button.classList.remove('hidden');
       }
     }
   }
 
-  async load_gltf_with_resources(gltfFile, allFiles)
+  async load_single_file_model(file)
   {
-    const gltfText = await gltfFile.text();
-    const gltf = JSON.parse(gltfText);
+    this.show_loading();
 
-    // Embed buffers as data URIs
-    if (gltf.buffers)
-    {
-      for (const buffer of gltf.buffers)
-      {
-        if (buffer.uri && !buffer.uri.startsWith('data:'))
-        {
-          const file = allFiles.find(f => f.name === buffer.uri);
-          if (file)
-          {
-            const arrayBuffer = await file.arrayBuffer();
-            const base64 = btoa(
-              new Uint8Array(arrayBuffer)
-                .reduce((data, byte) => data + String.fromCharCode(byte), '')
-            );
-            buffer.uri = `data:application/octet-stream;base64,${base64}`;
-          }
-        }
-      }
-    }
-
-    // Embed images as data URIs and preserve original filenames
-    if (gltf.images)
-    {
-      for (const image of gltf.images)
-      {
-        if (image.uri && !image.uri.startsWith('data:'))
-        {
-          const file = allFiles.find(f => f.name === image.uri);
-          if (file)
-          {
-            // Preserve the original filename in the name property
-            if (!image.name)
-            {
-              image.name = image.uri;
-            }
-
-            const arrayBuffer = await file.arrayBuffer();
-            const base64 = btoa(
-              new Uint8Array(arrayBuffer)
-                .reduce((data, byte) => data + String.fromCharCode(byte), '')
-            );
-            const mimeType = file.type || this.getMimeType(file.name);
-            image.uri = `data:${mimeType};base64,${base64}`;
-          }
-        }
-      }
-    }
-
-    // Send embedded GLTF
-    const embeddedGltfJson = JSON.stringify(gltf);
-    const base64String = btoa(embeddedGltfJson);
+    const arrayBuffer = await file.arrayBuffer();
 
     this.iframe.contentWindow.postMessage({
-      type: 'loadModelFromBase64',
-      data: base64String,
+      type: 'loadModelFromBinary',
+      data: arrayBuffer,
+      extension: file.name.split('.').pop().toLowerCase(),
+      fileSize: arrayBuffer.byteLength
+    }, '*', [arrayBuffer]);
+
+    this.on_model_load_started();
+  }
+
+  async load_gltf_with_resources(gltfFile, allFiles)
+  {
+    this.show_loading();
+
+    const files = [];
+    const transferables = [];
+
+    for (const file of allFiles)
+    {
+      const arrayBuffer = await file.arrayBuffer();
+      transferables.push(arrayBuffer);
+      files.push({
+        name: this.getTransferFileName(file),
+        mimeType: file.type || this.getMimeType(file.name),
+        data: arrayBuffer
+      });
+    }
+
+    this.iframe.contentWindow.postMessage({
+      type: 'loadModelFromFiles',
+      files: files,
+      entryFileName: this.getTransferFileName(gltfFile),
       extension: 'gltf',
-      fileSize: embeddedGltfJson.length
-    }, '*');
+      fileSize: files.reduce((total, file) => total + file.data.byteLength, 0)
+    }, '*', transferables);
+
+    this.on_model_load_started();
   }
 
   getMimeType(filename)
@@ -241,6 +187,11 @@ export class HomeView
       basis: 'image/basis'
     };
     return mimeTypes[ext] || 'application/octet-stream';
+  }
+
+  getTransferFileName(file)
+  {
+    return file.relativePath || file.webkitRelativePath || file.name;
   }
 
   on_drop_dragenter(event)
@@ -302,7 +253,7 @@ export class HomeView
     {
       if (entry.isFile)
       {
-        const file = await this.get_file_from_entry(entry);
+        const file = await this.get_file_from_entry(entry, entry.fullPath?.replace(/^\/+/, '') || entry.name);
         allFiles.push(file);
       }
       else if (entry.isDirectory)
@@ -318,11 +269,15 @@ export class HomeView
     }
   }
 
-  async get_file_from_entry(fileEntry)
+  async get_file_from_entry(fileEntry, relativePath = fileEntry.name)
   {
     return new Promise((resolve, reject) =>
     {
-      fileEntry.file(resolve, reject);
+      fileEntry.file(file =>
+      {
+        file.relativePath = relativePath;
+        resolve(file);
+      }, reject);
     });
   }
 
@@ -347,10 +302,14 @@ export class HomeView
       {
         if (entry.isFile)
         {
-          const file = await this.get_file_from_entry(entry);
+          const file = await this.get_file_from_entry(entry, entry.fullPath?.replace(/^\/+/, '') || entry.name);
           files.push(file);
         }
-        // Skip nested folders (entry.isDirectory)
+        else if (entry.isDirectory)
+        {
+          const nestedFiles = await this.read_directory(entry);
+          files.push(...nestedFiles);
+        }
       }
       entries = await read_entries();
     }
@@ -366,25 +325,37 @@ export class HomeView
 
   async on_example_click(index)
   {
-    this.modal_content.classList.add('hidden');
-    this.modal_loading.classList.remove('hidden');
+    this.show_loading();
 
-    const response = await fetch(this.examples[index].url);
-    const arrayBuffer = await response.arrayBuffer();
-
-    // Convert to base64
-    const base64String = btoa(
-      new Uint8Array(arrayBuffer)
-        .reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
+    let fileSize = 0;
+    try
+    {
+      const response = await fetch(this.examples[index].url, { method: 'HEAD' });
+      fileSize = Number(response.headers.get('content-length')) || 0;
+    }
+    catch (error)
+    {
+      console.warn('Unable to fetch example file size:', error);
+    }
 
     this.iframe.contentWindow.postMessage({
-      type: 'loadModelFromBase64',
-      data: base64String,
-      extension: 'glb',
-      fileSize: arrayBuffer.byteLength
+      type: 'loadModelFromUri',
+      dataUri: this.examples[index].url,
+      extension: this.examples[index].url.split('.').pop().toLowerCase(),
+      fileSize: fileSize
     }, '*');
 
+    this.on_model_load_started();
+  }
+
+  show_loading()
+  {
+    this.modal_content.classList.add('hidden');
+    this.modal_loading.classList.remove('hidden');
+  }
+
+  on_model_load_started()
+  {
     this.modal.classList.add('hidden');
     this.iframe_container.classList.remove('disabled');
     this.blur.classList.add('hidden');
