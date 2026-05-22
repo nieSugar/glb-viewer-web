@@ -40,15 +40,26 @@ Before you begin, ensure you have met the following requirements:
 * You have installed the following version of
     1. Node.js: `18.x.x`
     2. Git: `2.x.x`
-    3. Yarn: `1.22.x`
+    3. pnpm: latest (recommended)
 
 ## Building GLB Viewer Web
 
 To build GLB Viewer Web, follow these steps:
 
-1. Build the application: `yarn build`
+1. Build the application: `pnpm run build`
 2. You'll find the built project on `dist` folder.
 3. You can test the build going to the dist folder with `http-server -c-1`
+
+## Deploying to GitHub Pages
+
+This repository now builds with a relative base path, so it can be published as a static site on GitHub Pages.
+
+1. Push the repository to GitHub.
+2. In the repository settings, set Pages source to GitHub Actions.
+3. Keep the default branch as `main` or update `.github/workflows/deploy.yml` to match your branch.
+4. Every push to `main` will build `dist` and deploy it automatically.
+
+If you want to publish manually, run `pnpm run build` and upload the `dist` folder to any static host.
 
 ## Committing and Pushing changes
 

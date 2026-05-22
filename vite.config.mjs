@@ -9,6 +9,7 @@ import packagejson from './package.json';
 const useHttps = process.env.VITE_USE_HTTPS === 'true';
 
 export default defineConfig({
+  base: './',
   plugins: [
     glsl(),
     vitePugPlugin({ pugLocals: {
@@ -39,7 +40,7 @@ export default defineConfig({
     }
     // watch({
     //   pattern: "./core/**/*.js",
-    //   command: "cd core && yarn build",
+    //   command: "cd core && pnpm run build",
     // }),
   ],
   build: {

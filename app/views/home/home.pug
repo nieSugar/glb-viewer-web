@@ -1,44 +1,49 @@
 .section.home.hidden
-    .button.home__change-model-button.hidden(onclick='app.home_view.on_change_model_click()')
+    .button.home__change-model-button.hidden(onclick='app.home_view.on_change_model_click()' data-i18n-attr='changeModel:data-label' data-label='Change Model')
         svg.home__change-model-button-icon(xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square-arrow-left-icon lucide-square-arrow-left")
             rect(width="18" height="18" x="3" y="3" rx="2")
             path(d="m12 8-4 4 4 4")
             path(d="M16 12H8")
     .home__iframe.disabled
-        iframe(src="#" frameborder="0" allowfullscreen)
+        iframe(src="#" frameborder="0" allowfullscreen allow="clipboard-read; clipboard-write")
     .home__modal.hidden
         input.home__modal-input.hidden(type='file' multiple id='fileInput' onchange='app.home_view.on_file_change(event)')
         .home__modal-content
             .home__content-top
+                .home__language-switch
+                    label.home__language-label(for='homeLanguageSelect' data-i18n='languageLabel') Language
+                    select#homeLanguageSelect.home__language-select(onchange='app.home_view.on_language_change(event)')
+                        option(value='en') English
+                        option(value='zh') 中文
                 .home__modal-header
                     .home__title-group
                         .home__icon
                             img(src='images/common/icon_512.png' alt='GLTF/GLB Viewer Icon')
-                        h1.home__title GLTF/GLB Viewer
-                    p.home__subtitle View and inspect your GLTF/GLB files.
+                        h1.home__title(data-i18n='title') GLTF/GLB Viewer
+                    p.home__subtitle(data-i18n='subtitle') View and inspect your GLTF/GLB files.
                 .home__top-trigger
                     .button.home__modal-input-trigger(onclick='app.home_view.trigger_file_input()')
                         .home__modal-input-trigger-text
-                            span Select -> File
-                            span Drop -> File/Folder
+                            span(data-i18n='selectFile') Select -> File
+                            span(data-i18n='dropFileFolder') Drop -> File/Folder
             .home__content-bottom
-                    .home__modal-bottom-title
+                    .home__modal-bottom-title(data-i18n='examplesTitle')
                         | Or try one of these:
                     .home__modal-examples
                         .button.home__modal-example(onclick='app.home_view.on_example_click("chick")')
                             img.home__modal-example-img(src='images/examples/chick.png' alt='GLTF/GLB Viewer Icon')
-                            .home__modal-example-title
+                            .home__modal-example-title(data-i18n='exampleChick')
                                 | Chick
                         .button.home__modal-example(onclick='app.home_view.on_example_click("cubohzi")')
                             img.home__modal-example-img(src='images/examples/cubohzi.png' alt='GLTF/GLB Viewer Icon')
-                            .home__modal-example-title
+                            .home__modal-example-title(data-i18n='exampleCubohzi')
                                 | Cubohzi
                         .button.home__modal-example(onclick='app.home_view.on_example_click("toy_car")')
                             img.home__modal-example-img(src='images/examples/toy_car.png' alt='GLTF/GLB Viewer Icon')
-                            .home__modal-example-title
+                            .home__modal-example-title(data-i18n='exampleToyCar')
                                 | Toy Car
             .home__drop-area
 
-        .home__modal-loading.hidden Loading...
+        .home__modal-loading.hidden(data-i18n='loading') Loading...
 
     .home__blur

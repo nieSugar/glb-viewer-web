@@ -49,7 +49,7 @@ class StartApp
   {
     console.log('run_app_process, Starting app process...');
 
-    this.app_process = spawn('yarn', ['start-vite'], { env: env_variables, shell: true }); //, { stdio: 'pipe' }
+    this.app_process = spawn('pnpm', ['run', 'start-vite'], { env: env_variables, shell: true }); //, { stdio: 'pipe' }
 
     this.app_process.stdout.on('data', (data) =>
     {
@@ -75,7 +75,7 @@ class StartApp
   {
     console.log('run_core_process, Starting core process...');
 
-    this.core_process = spawn('yarn', ['start-core'], { shell: true, env: env_variables });
+    this.core_process = spawn('pnpm', ['run', 'start-core'], { shell: true, env: env_variables });
 
     this.core_process.stdout.on('data', (data) =>
     {

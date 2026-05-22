@@ -10,7 +10,7 @@ class BuildApp
 
       Object.assign(env_variables, process.env);
 
-      execSync('yarn build-vite', { env: env_variables, stdio: 'inherit' });
+      execSync('pnpm run build-vite', { env: env_variables, stdio: 'inherit' });
     }
     catch (e)
     {

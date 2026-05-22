@@ -7,6 +7,40 @@ export class HomeView
     this.name = Sections.HOME;
     this.url = SectionsURLs.HOME;
     this.container = document.querySelector('.home');
+
+    this.translations = {
+      en: {
+        languageLabel: 'Language',
+        title: 'GLTF/GLB Viewer',
+        subtitle: 'View and inspect your GLTF/GLB files.',
+        selectFile: 'Select -> File',
+        dropFileFolder: 'Drop -> File/Folder',
+        examplesTitle: 'Or try one of these:',
+        exampleChick: 'Chick',
+        exampleCubohzi: 'Cubohzi',
+        exampleToyCar: 'Toy Car',
+        loading: 'Loading...',
+        changeModel: 'Change Model',
+        invalidFile: 'Please select a valid file'
+      },
+      zh: {
+        languageLabel: '语言',
+        title: 'GLTF/GLB 查看器',
+        subtitle: '查看并检查你的 GLTF/GLB 文件。',
+        selectFile: '选择 -> 文件',
+        dropFileFolder: '拖放 -> 文件/文件夹',
+        examplesTitle: '或试试这些示例：',
+        exampleChick: '小鸡',
+        exampleCubohzi: '方块仔',
+        exampleToyCar: '玩具车',
+        loading: '加载中...',
+        changeModel: '更换模型',
+        invalidFile: '请选择有效的模型文件'
+      }
+    };
+
+    this.language_storage_key = 'homeViewLanguage';
+    this.current_language = this.get_default_language();
   }
 
   start()
@@ -21,6 +55,10 @@ export class HomeView
     this.change_model_button = this.container.querySelector('.home__change-model-button');
 
     this.input = this.container.querySelector('.home__modal-input');
+
+    this.language_select = this.container.querySelector('.home__language-select');
+    this.localized_elements = this.container.querySelectorAll('[data-i18n]');
+    this.localized_attribute_elements = this.container.querySelectorAll('[data-i18n-attr]');
 
     this.blur = this.container.querySelector('.home__blur');
 
@@ -51,6 +89,80 @@ export class HomeView
         url: model_url + 'toy_car.glb'
       }
     };
+
+    if (this.language_select)
+    {
+      this.language_select.value = this.current_language;
+    }
+
+    this.apply_language(this.current_language);
+  }
+
+  get_default_language()
+  {
+    const stored_language = localStorage.getItem(this.language_storage_key);
+
+    if (stored_language && this.translations[stored_language])
+    {
+      return stored_language;
+    }
+
+    return navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+  }
+
+  t(key)
+  {
+    const active = this.translations[this.current_language] || this.translations.en;
+    return active[key] || this.translations.en[key] || key;
+  }
+
+  apply_language(language)
+  {
+    const target_language = this.translations[language] ? language : 'en';
+
+    this.current_language = target_language;
+    localStorage.setItem(this.language_storage_key, target_language);
+
+    if (this.iframe && this.iframe.contentWindow)
+    {
+      this.iframe.contentWindow.postMessage({
+        type: 'updateLanguage',
+        language: target_language
+      }, '*');
+    }
+
+    this.localized_elements.forEach((element) =>
+    {
+      const key = element.getAttribute('data-i18n');
+      if (!key)
+      {
+        return;
+      }
+
+      element.textContent = this.t(key);
+    });
+
+    this.localized_attribute_elements.forEach((element) =>
+    {
+      const mapping = element.getAttribute('data-i18n-attr');
+      if (!mapping)
+      {
+        return;
+      }
+
+      const [key, attribute] = mapping.split(':');
+      if (!key || !attribute)
+      {
+        return;
+      }
+
+      element.setAttribute(attribute, this.t(key));
+    });
+  }
+
+  on_language_change(event)
+  {
+    this.apply_language(event.target.value);
   }
 
   on_iframe_ready()
@@ -79,6 +191,11 @@ export class HomeView
     this.iframe.contentWindow.postMessage({
       type: 'setWebViewPath',
       webview_path: '/webview/'
+    }, '*');
+
+    this.iframe.contentWindow.postMessage({
+      type: 'updateLanguage',
+      language: this.current_language
     }, '*');
   }
 
@@ -112,7 +229,7 @@ export class HomeView
       const file = files.find(file => file.name.toLowerCase().endsWith('.glb'));
       if (!file)
       {
-        alert('Please select a valid file');
+        alert(this.t('invalidFile'));
         return;
       }
 
