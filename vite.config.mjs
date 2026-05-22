@@ -7,9 +7,10 @@ import sections_meta from './app/data/sections_meta.json';
 import packagejson from './package.json';
 
 const useHttps = process.env.VITE_USE_HTTPS === 'true';
+const basePath = process.env.VITE_BASE_PATH ?? './';
 
 export default defineConfig({
-  base: './',
+  base: basePath,
   plugins: [
     glsl(),
     vitePugPlugin({ pugLocals: {

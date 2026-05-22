@@ -52,12 +52,13 @@ To build GLB Viewer Web, follow these steps:
 
 ## Deploying to GitHub Pages
 
-This repository now builds with a relative base path, so it can be published as a static site on GitHub Pages.
+This repository now builds with a configurable base path, so it can be published as a static site on GitHub Pages without breaking asset URLs.
 
 1. Push the repository to GitHub.
 2. In the repository settings, set Pages source to GitHub Actions.
 3. Keep the default branch as `main` or update `.github/workflows/deploy.yml` to match your branch.
 4. Every push to `main` will build `dist` and deploy it automatically.
+5. The workflow sets `VITE_BASE_PATH` automatically to `/<repo-name>/`, which matches the GitHub Pages project URL.
 
 If you want to publish manually, run `pnpm run build` and upload the `dist` folder to any static host.
 
