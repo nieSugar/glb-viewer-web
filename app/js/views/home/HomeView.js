@@ -62,8 +62,10 @@ export class HomeView
 
     this.blur = this.container.querySelector('.home__blur');
 
+    this.webview_path = import.meta.env.DEV ? 'http://localhost:1235/webview/' : this.get_public_path('webview/');
+
     // Load app
-    this.iframe.src = import.meta.env.DEV ? 'http://localhost:1235/webview/' : '/webview/index.html';
+    this.iframe.src = import.meta.env.DEV ? this.webview_path : this.get_public_path('webview/index.html');
 
     this.drop_area = this.container.querySelector('.home__drop-area');
     this._dragEnterCount = 0;
@@ -74,7 +76,7 @@ export class HomeView
     document.body.addEventListener('dragend', this.on_drop_reset.bind(this));
     document.body.addEventListener('drop', this.on_drop_drop.bind(this));
 
-    const model_url = import.meta.env.DEV ? 'http://localhost:1234/models/' : '/models/';
+    const model_url = import.meta.env.DEV ? 'http://localhost:1234/models/' : this.get_public_path('models/');
     this.examples = {
       chick: {
         name: 'Chick',
@@ -108,6 +110,15 @@ export class HomeView
     }
 
     return navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+  }
+
+  get_public_path(path)
+  {
+    const base_url = import.meta.env.BASE_URL || '/';
+    const normalized_base_url = base_url.endsWith('/') ? base_url : `${base_url}/`;
+    const normalized_path = path.replace(/^\/+/, '');
+
+    return `${normalized_base_url}${normalized_path}`;
   }
 
   t(key)
@@ -190,7 +201,7 @@ export class HomeView
 
     this.iframe.contentWindow.postMessage({
       type: 'setWebViewPath',
-      webview_path: '/webview/'
+      webview_path: this.webview_path
     }, '*');
 
     this.iframe.contentWindow.postMessage({
