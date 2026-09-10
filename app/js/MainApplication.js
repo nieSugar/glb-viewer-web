@@ -17,6 +17,11 @@ export class MainApplication
         this.home_view.on_iframe_ready();
       }
 
+      if (event.data.type === 'controlsHidden')
+      {
+        this.home_view.set_controls_hidden(event.data.hidden);
+      }
+
       if (event.data.type === 'openJson' || event.data.type === 'openAsText')
       {
         this.open_info_in_new_tab(event.data.payload);

@@ -1,5 +1,9 @@
 .home {}
 
+    .home.controls-hidden .home__change-model-button {
+        display: none;
+    }
+
     .home__blur {
         @include backdrop-filter(blur(3 * $ptr));
 

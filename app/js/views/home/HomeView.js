@@ -75,6 +75,7 @@ export class HomeView
     document.body.addEventListener('dragleave', this.on_drop_dragleave.bind(this));
     document.body.addEventListener('dragend', this.on_drop_reset.bind(this));
     document.body.addEventListener('drop', this.on_drop_drop.bind(this));
+    document.addEventListener('keydown', this.on_keydown.bind(this));
 
     const model_url = import.meta.env.DEV ? 'http://localhost:1234/models/' : this.get_public_path('models/');
     this.examples = {
@@ -222,6 +223,28 @@ export class HomeView
 
   update()
   {
+  }
+
+  on_keydown(event)
+  {
+    const target = event.target;
+    const is_editing = target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      target.isContentEditable;
+
+    if (event.key.toLowerCase() !== 'h' || event.repeat || event.ctrlKey || event.metaKey || event.altKey || is_editing)
+    {
+      return;
+    }
+
+    this.set_controls_hidden(!this.container.classList.contains('controls-hidden'));
+  }
+
+  set_controls_hidden(hidden)
+  {
+    this.container.classList.toggle('controls-hidden', hidden);
+    this.iframe.contentWindow.postMessage({ type: 'setControlsHidden', hidden: hidden }, '*');
   }
 
   trigger_file_input()
