@@ -184,6 +184,7 @@ export class HomeView
       prettifyPropertyLabels: true,
       relevant3dObjectKeys: [
         'name',
+        'visible',
         'type',
         'position',
         'rotation',
