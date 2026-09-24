@@ -13,6 +13,11 @@ export class HomeView
         languageLabel: 'Language',
         title: 'GLTF/GLB Viewer',
         subtitle: 'View and inspect your GLTF/GLB files.',
+        seoExplore: 'View and explore your GLTF/GLB files.',
+        viewerIconAlt: 'GLTF/GLB Viewer icon',
+        exampleChickAlt: 'Chick model preview',
+        exampleCubohziAlt: 'Cubohzi model preview',
+        exampleToyCarAlt: 'Toy Car model preview',
         selectFile: 'Select -> File',
         dropFileFolder: 'Drop -> File/Folder',
         examplesTitle: 'Or try one of these:',
@@ -27,6 +32,11 @@ export class HomeView
         languageLabel: '语言',
         title: 'GLTF/GLB 查看器',
         subtitle: '查看并检查你的 GLTF/GLB 文件。',
+        seoExplore: '查看并探索你的 GLTF/GLB 文件。',
+        viewerIconAlt: 'GLTF/GLB 查看器图标',
+        exampleChickAlt: '小鸡模型预览',
+        exampleCubohziAlt: '方块仔模型预览',
+        exampleToyCarAlt: '玩具车模型预览',
         selectFile: '选择 -> 文件',
         dropFileFolder: '拖放 -> 文件/文件夹',
         examplesTitle: '或试试这些示例：',
@@ -57,8 +67,8 @@ export class HomeView
     this.input = this.container.querySelector('.home__modal-input');
 
     this.language_select = this.container.querySelector('.home__language-select');
-    this.localized_elements = this.container.querySelectorAll('[data-i18n]');
-    this.localized_attribute_elements = this.container.querySelectorAll('[data-i18n-attr]');
+    this.localized_elements = document.querySelectorAll('[data-i18n]');
+    this.localized_attribute_elements = document.querySelectorAll('[data-i18n-attr]');
 
     this.blur = this.container.querySelector('.home__blur');
 
@@ -134,6 +144,8 @@ export class HomeView
 
     this.current_language = target_language;
     localStorage.setItem(this.language_storage_key, target_language);
+    document.documentElement.lang = target_language === 'zh' ? 'zh-CN' : 'en';
+    document.title = this.t('title');
 
     if (this.iframe && this.iframe.contentWindow)
     {
