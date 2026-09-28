@@ -129,7 +129,7 @@ export class HomeView
     const normalized_base_url = base_url.endsWith('/') ? base_url : `${base_url}/`;
     const normalized_path = path.replace(/^\/+/, '');
 
-    return `${normalized_base_url}${normalized_path}`;
+    return new URL(`${normalized_base_url}${normalized_path}`, document.baseURI).href;
   }
 
   t(key)
