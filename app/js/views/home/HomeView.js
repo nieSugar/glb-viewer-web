@@ -26,7 +26,9 @@ export class HomeView
         exampleToyCar: 'Toy Car',
         loading: 'Loading...',
         changeModel: 'Change Model',
-        invalidFile: 'Please select a valid file'
+        invalidFile: 'Please select a valid model file.',
+        loadFailed: 'Unable to load this model. Check the file and its resources, then try again.',
+        viewerNotReady: 'The viewer is not ready yet. Please try again shortly.'
       },
       zh: {
         languageLabel: '语言',
@@ -45,12 +47,17 @@ export class HomeView
         exampleToyCar: '玩具车',
         loading: '加载中...',
         changeModel: '更换模型',
-        invalidFile: '请选择有效的模型文件'
+        invalidFile: '请选择有效的模型文件。',
+        loadFailed: '模型加载失败，请检查文件及其关联资源，然后重试。',
+        viewerNotReady: '查看器尚未准备好，请稍后重试。'
       }
     };
 
     this.language_storage_key = 'homeViewLanguage';
     this.current_language = this.get_default_language();
+    this._request_sequence = 0;
+    this._active_request_id = null;
+    this._iframe_ready = false;
   }
 
   start()
@@ -61,6 +68,11 @@ export class HomeView
     this.modal = this.container.querySelector('.home__modal');
     this.modal_content = this.container.querySelector('.home__modal-content');
     this.modal_loading = this.container.querySelector('.home__modal-loading');
+    this.load_error = document.createElement('div');
+    this.load_error.className = 'home__load-error hidden';
+    this.load_error.setAttribute('role', 'alert');
+    this.load_error.setAttribute('data-i18n', 'loadFailed');
+    this.modal_content.prepend(this.load_error);
 
     this.change_model_button = this.container.querySelector('.home__change-model-button');
 
@@ -74,8 +86,9 @@ export class HomeView
 
     this.webview_path = import.meta.env.DEV ? 'http://localhost:1235/webview/' : this.get_public_path('webview/');
 
-    // Load app
-    this.iframe.src = import.meta.env.DEV ? this.webview_path : this.get_public_path('webview/index.html');
+    const iframe_url = new URL(import.meta.env.DEV ? this.webview_path : this.get_public_path('webview/index.html'));
+    iframe_url.searchParams.set('hostOrigin', window.location.origin);
+    this.iframe.src = iframe_url.href;
 
     this.drop_area = this.container.querySelector('.home__drop-area');
     this._dragEnterCount = 0;
@@ -149,10 +162,7 @@ export class HomeView
 
     if (this.iframe && this.iframe.contentWindow)
     {
-      this.iframe.contentWindow.postMessage({
-        type: 'updateLanguage',
-        language: target_language
-      }, '*');
+      this.post_to_viewer({ type: 'updateLanguage', language: target_language });
     }
 
     this.localized_elements.forEach((element) =>
@@ -189,8 +199,15 @@ export class HomeView
     this.apply_language(event.target.value);
   }
 
+  post_to_viewer(message, transferables = [])
+  {
+    this.iframe.contentWindow.postMessage(message, new URL(this.iframe.src).origin, transferables);
+  }
+
   on_iframe_ready()
   {
+    this._active_request_id = null;
+    this._iframe_ready = true;
     // TODO: Add ability to modify these settings from web
     const config = {
       prettifyPropertyLabels: true,
@@ -206,22 +223,15 @@ export class HomeView
       ]
     };
 
-    this.modal.classList.remove('hidden');
+    this.show_model_selection();
 
-    this.iframe.contentWindow.postMessage({
-      type: 'updateConfig',
-      config: config
-    }, '*');
-
-    this.iframe.contentWindow.postMessage({
-      type: 'setWebViewPath',
-      webview_path: this.webview_path
-    }, '*');
-
-    this.iframe.contentWindow.postMessage({
-      type: 'updateLanguage',
-      language: this.current_language
-    }, '*');
+    this.post_to_viewer({ type: 'updateConfig', config });
+    this.post_to_viewer({ type: 'setWebViewPath', webview_path: this.webview_path });
+    this.post_to_viewer({ type: 'updateLanguage', language: this.current_language });
+    this.post_to_viewer({
+      type: 'setHostCapabilities',
+      capabilities: { openJson: true, openAsText: true, openInBlender: false }
+    });
   }
 
   on_enter()
@@ -257,69 +267,61 @@ export class HomeView
   set_controls_hidden(hidden)
   {
     this.container.classList.toggle('controls-hidden', hidden);
-    this.iframe.contentWindow.postMessage({ type: 'setControlsHidden', hidden: hidden }, '*');
+    this.post_to_viewer({ type: 'setControlsHidden', hidden });
   }
 
   trigger_file_input()
   {
+    this.input.value = '';
     this.input.click();
   }
 
-  on_file_change(event, dropped_files = null)
+  async on_file_change(event, dropped_files = null, requestId = null)
   {
     const files = Array.from(dropped_files || event.target.files);
+    if (!files.length && !requestId) return;
+    requestId = requestId || this.begin_model_request();
+    if (!requestId || requestId !== this._active_request_id) return;
+    this.input.value = '';
 
-    const has_gltf = files.some(file => file.name.toLowerCase().endsWith('.gltf'));
-
-    if (!has_gltf)
+    try
     {
-      const file = files.find(file => file.name.toLowerCase().endsWith('.glb'));
-      if (!file)
-      {
-        alert(this.t('invalidFile'));
-        return;
-      }
-
-      this.load_single_file_model(file);
+      const gltf = files.find(file => file.name.toLowerCase().endsWith('.gltf'));
+      const glb = files.find(file => file.name.toLowerCase().endsWith('.glb'));
+      if (gltf) await this.load_gltf_with_resources(gltf, files, requestId);
+      else if (glb) await this.load_single_file_model(glb, requestId);
+      else this.fail_model_request(requestId, 'invalidFile');
     }
-    else if (has_gltf)
+    catch (error)
     {
-      // search for a gltf file
-      const file = files.find(file => file.name.toLowerCase().endsWith('.gltf'));
-
-      if (file)
-      {
-        this.load_gltf_with_resources(file, files);
-      }
+      this.fail_model_request(requestId, 'loadFailed', error);
     }
   }
 
-  async load_single_file_model(file)
+  async load_single_file_model(file, requestId)
   {
-    this.show_loading();
-
     const arrayBuffer = await file.arrayBuffer();
+    if (requestId !== this._active_request_id) return;
 
-    this.iframe.contentWindow.postMessage({
+    this.post_to_viewer({
       type: 'loadModelFromBinary',
+      requestId,
       data: arrayBuffer,
       extension: file.name.split('.').pop().toLowerCase(),
       fileSize: arrayBuffer.byteLength
-    }, '*', [arrayBuffer]);
-
-    this.on_model_load_started();
+    }, [arrayBuffer]);
   }
 
-  async load_gltf_with_resources(gltfFile, allFiles)
+  async load_gltf_with_resources(gltfFile, allFiles, requestId)
   {
-    this.show_loading();
-
     const files = [];
     const transferables = [];
 
     for (const file of allFiles)
     {
+      if (requestId !== this._active_request_id) return;
       const arrayBuffer = await file.arrayBuffer();
+      if (requestId !== this._active_request_id) return;
       transferables.push(arrayBuffer);
       files.push({
         name: this.getTransferFileName(file),
@@ -328,15 +330,14 @@ export class HomeView
       });
     }
 
-    this.iframe.contentWindow.postMessage({
+    this.post_to_viewer({
       type: 'loadModelFromFiles',
-      files: files,
+      requestId,
+      files,
       entryFileName: this.getTransferFileName(gltfFile),
       extension: 'gltf',
       fileSize: files.reduce((total, file) => total + file.data.byteLength, 0)
-    }, '*', transferables);
-
-    this.on_model_load_started();
+    }, transferables);
   }
 
   getMimeType(filename)
@@ -393,43 +394,35 @@ export class HomeView
   {
     event.preventDefault();
     this.on_drop_reset();
-    const items = Array.from(event.dataTransfer.items);
+    const requestId = this.begin_model_request();
+    if (!requestId) return;
 
-    const entries = items
-      .filter(item => item.kind === 'file')
-      .map(item => item.webkitGetAsEntry())
-      .filter(entry => entry !== null);
-
-    // If single folder dropped, collect all files from it
-    if (entries.length === 1 && entries[0].isDirectory)
+    try
     {
-      const files = await this.read_directory(entries[0]);
-      if (files.length > 0)
+      const items = Array.from(event.dataTransfer.items);
+      const entries = items
+        .filter(item => item.kind === 'file')
+        .map(item => item.webkitGetAsEntry())
+        .filter(entry => entry !== null);
+      const files = [];
+      for (const entry of entries)
       {
-        this.on_file_change(null, files);
+        if (requestId !== this._active_request_id) return;
+        if (entry.isFile)
+        {
+          files.push(await this.get_file_from_entry(entry, entry.fullPath?.replace(/^\/+/, '') || entry.name));
+        }
+        else if (entry.isDirectory)
+        {
+          files.push(...await this.read_directory(entry, requestId));
+        }
+        if (requestId !== this._active_request_id) return;
       }
-      return;
+      await this.on_file_change(null, files, requestId);
     }
-
-    // If multiple files or mix of files/folders dropped
-    const allFiles = [];
-    for (const entry of entries)
+    catch (error)
     {
-      if (entry.isFile)
-      {
-        const file = await this.get_file_from_entry(entry, entry.fullPath?.replace(/^\/+/, '') || entry.name);
-        allFiles.push(file);
-      }
-      else if (entry.isDirectory)
-      {
-        const files = await this.read_directory(entry);
-        allFiles.push(...files);
-      }
-    }
-
-    if (allFiles.length > 0)
-    {
-      this.on_file_change(null, allFiles);
+      this.fail_model_request(requestId, 'loadFailed', error);
     }
   }
 
@@ -445,7 +438,7 @@ export class HomeView
     });
   }
 
-  async read_directory(directoryEntry)
+  async read_directory(directoryEntry, requestId)
   {
     const files = [];
     const reader = directoryEntry.createReader();
@@ -460,21 +453,24 @@ export class HomeView
 
     // Keep reading until no more entries (readEntries can return in batches)
     let entries = await read_entries();
-    while (entries.length > 0)
+    while (entries.length > 0 && requestId === this._active_request_id)
     {
       for (const entry of entries)
       {
+        if (requestId !== this._active_request_id) return [];
         if (entry.isFile)
         {
           const file = await this.get_file_from_entry(entry, entry.fullPath?.replace(/^\/+/, '') || entry.name);
+          if (requestId !== this._active_request_id) return [];
           files.push(file);
         }
         else if (entry.isDirectory)
         {
-          const nestedFiles = await this.read_directory(entry);
+          const nestedFiles = await this.read_directory(entry, requestId);
           files.push(...nestedFiles);
         }
       }
+      if (requestId !== this._active_request_id) return [];
       entries = await read_entries();
     }
 
@@ -489,53 +485,108 @@ export class HomeView
 
   async on_example_click(index)
   {
-    this.show_loading();
+    const example = this.examples[index];
+    if (!example) return;
+    const requestId = this.begin_model_request();
+    if (!requestId) return;
 
     let fileSize = 0;
     try
     {
-      const response = await fetch(this.examples[index].url, { method: 'HEAD' });
+      const response = await fetch(example.url, { method: 'HEAD' });
       fileSize = Number(response.headers.get('content-length')) || 0;
     }
     catch (error)
     {
-      console.warn('Unable to fetch example file size:', error);
+      if (requestId === this._active_request_id) console.warn('Unable to fetch example file size:', error);
     }
+    if (requestId !== this._active_request_id) return;
 
-    this.iframe.contentWindow.postMessage({
-      type: 'loadModelFromUri',
-      dataUri: this.examples[index].url,
-      extension: this.examples[index].url.split('.').pop().toLowerCase(),
-      fileSize: fileSize
-    }, '*');
+    try
+    {
+      this.post_to_viewer({
+        type: 'loadModelFromUri',
+        requestId,
+        dataUri: example.url,
+        extension: example.url.split('.').pop().toLowerCase(),
+        fileSize
+      });
+    }
+    catch (error)
+    {
+      this.fail_model_request(requestId, 'loadFailed', error);
+    }
+  }
 
-    this.on_model_load_started();
+  begin_model_request()
+  {
+    const requestId = 'web-' + ++this._request_sequence;
+    this._active_request_id = requestId;
+    if (!this._iframe_ready)
+    {
+      this.fail_model_request(requestId, 'viewerNotReady');
+      return null;
+    }
+    this.show_loading();
+    this.post_to_viewer({ type: 'beginModelLoad', requestId });
+    return requestId;
   }
 
   show_loading()
   {
+    this.modal.classList.remove('hidden');
     this.modal_content.classList.add('hidden');
     this.modal_loading.classList.remove('hidden');
+    this.load_error.classList.add('hidden');
+    this.change_model_button.classList.add('hidden');
+    this.iframe_container.classList.add('disabled');
+    this.blur.classList.remove('hidden');
   }
 
-  on_model_load_started()
+  on_model_load_state(message)
   {
+    if (message.requestId !== this._active_request_id) return;
+    if (message.status === 'error')
+    {
+      this.fail_model_request(message.requestId, 'loadFailed');
+      return;
+    }
+    this._active_request_id = null;
+    this.modal_loading.classList.add('hidden');
     this.modal.classList.add('hidden');
     this.iframe_container.classList.remove('disabled');
     this.blur.classList.add('hidden');
     this.change_model_button.classList.remove('hidden');
   }
 
+  fail_model_request(requestId, key, error)
+  {
+    if (requestId !== this._active_request_id) return;
+    if (error) console.warn('Unable to load model:', error);
+    if (this._iframe_ready) this.post_to_viewer({ type: 'cancelModelLoad', requestId });
+    this._active_request_id = null;
+    this.show_model_selection();
+    this.load_error.setAttribute('data-i18n', key);
+    this.load_error.textContent = this.t(key);
+    this.load_error.classList.remove('hidden');
+  }
+
+  show_model_selection()
+  {
+    this.modal.classList.remove('hidden');
+    this.modal_content.classList.remove('hidden');
+    this.iframe_container.classList.add('disabled');
+    this.blur.classList.remove('hidden');
+    this.input.value = '';
+    this.modal_loading.classList.add('hidden');
+    this.change_model_button.classList.add('hidden');
+    this.load_error.classList.add('hidden');
+  }
+
   on_change_model_click()
   {
-    // this.modal.classList.remove('hidden');
-    // this.modal_content.classList.remove('hidden');
-    // this.iframe_container.classList.add('disabled');
-    // this.blur.classList.remove('hidden');
-    // this.input.value = '';
-    // this.modal_loading.classList.add('hidden');
-    // this.change_model_button.classList.add('hidden');
-
-    window.location.reload();
+    if (this._active_request_id) this.post_to_viewer({ type: 'cancelModelLoad', requestId: this._active_request_id });
+    this._active_request_id = null;
+    this.show_model_selection();
   }
 }

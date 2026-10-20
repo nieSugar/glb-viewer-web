@@ -8,31 +8,38 @@ export class MainApplication
 
   start()
   {
-    window.addEventListener('message', (event) =>
-    {
-      console.log('Message received:', event.data);
-
-      if (event.data.type === 'ready')
-      {
-        this.home_view.on_iframe_ready();
-      }
-
-      if (event.data.type === 'controlsHidden')
-      {
-        this.home_view.set_controls_hidden(event.data.hidden);
-      }
-
-      if (event.data.type === 'openJson' || event.data.type === 'openAsText')
-      {
-        this.open_info_in_new_tab(event.data.payload);
-      }
-    });
-
     this.home_view = new HomeView();
+    window.addEventListener('message', event => this.on_viewer_message(event));
     this.home_view.start();
-
-    // Go to home view
     this.home_view.on_enter();
+  }
+
+  on_viewer_message(event)
+  {
+    const iframe = this.home_view.iframe;
+    if (!iframe || event.source !== iframe.contentWindow || event.origin !== new URL(iframe.src).origin) return;
+    const message = event.data;
+    if (!message || typeof message !== 'object' || Array.isArray(message)) return;
+
+    switch (message.type)
+    {
+    case 'ready':
+      this.home_view.on_iframe_ready();
+      break;
+    case 'controlsHidden':
+      if (typeof message.hidden === 'boolean') this.home_view.set_controls_hidden(message.hidden);
+      break;
+    case 'modelLoadState':
+      if (typeof message.requestId !== 'string' || !message.requestId ||
+          !['loaded', 'error'].includes(message.status) ||
+          (message.error !== undefined && typeof message.error !== 'string')) return;
+      this.home_view.on_model_load_state(message);
+      break;
+    case 'openJson':
+    case 'openAsText':
+      if (message.payload && typeof message.payload === 'object') this.open_info_in_new_tab(message.payload);
+      break;
+    }
   }
 
   update()
@@ -52,7 +59,15 @@ export class MainApplication
     let mimeType = '';
     let filename = '';
 
-    content = JSON.stringify(payload, null, 2);
+    try
+    {
+      content = JSON.stringify(payload, null, 2);
+    }
+    catch (error)
+    {
+      console.warn('Unable to serialize viewer data:', error);
+      return;
+    }
     mimeType = 'application/json';
     filename = 'data.json';
 
