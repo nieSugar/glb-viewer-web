@@ -46,9 +46,12 @@ Before you begin, ensure you have met the following requirements:
 
 To build GLB Viewer Web, follow these steps:
 
-1. Build the application: `pnpm run build`
-2. You'll find the built project on `dist` folder.
-3. You can test the build going to the dist folder with `http-server -c-1`
+1. Initialize the pinned core with `git submodule update --init --recursive`, then run `pnpm install --frozen-lockfile` and `pnpm --dir glb-viewer-core install --frozen-lockfile`. Dependency installation does not modify Git.
+2. Build the application: `pnpm run build`
+3. You'll find the built project on `dist` folder.
+4. You can test the build going to the dist folder with `http-server -c-1`
+
+`pnpm run update-core` restores the recorded submodule commit. Upgrade core explicitly and commit its new pointer in both hosts.
 
 ## Deploying to GitHub Pages
 

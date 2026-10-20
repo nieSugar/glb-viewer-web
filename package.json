@@ -6,11 +6,8 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "preinstall": "pnpm run setup-git && pnpm run setup-submodules && pnpm run update-submodules && pnpm run config-hooks",
-    "postinstall": "pnpm run setup-submodules && pnpm run update-submodules",
-    "setup-git": "git init",
     "setup-submodules": "pnpm run setup-core-submodule",
-    "setup-core-submodule": "node tasks/setup_submodule.mjs glb-viewer-core",
+    "setup-core-submodule": "node tasks/update_submodule.mjs glb-viewer-core",
     "update-submodules": "pnpm run update-core",
     "update-core": "node tasks/update_submodule.mjs glb-viewer-core",
     "config-hooks": "git config core.hooksPath git_hooks",
